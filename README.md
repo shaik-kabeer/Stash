@@ -1,8 +1,30 @@
-# RewardOS - The Mint for Rewards
+# Stash - Loyalty Asset Operating System
 
-RewardOS aggregates loyalty points, reward points, miles, cashback balances, and memberships from multiple providers into a single intelligent dashboard. Think of it as managing an investment portfolio, but for rewards.
+A full-stack SaaS platform for aggregating, analyzing, and optimizing credit card rewards, loyalty points, miles, and cashback.
 
-## Quick Start
+## Tech Stack
+
+- **Frontend:** Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Recharts
+- **Backend:** Next.js API Routes, Prisma 7 ORM
+- **Database:** SQLite (local) / Turso (production)
+- **Auth:** NextAuth.js (JWT + Credentials)
+- **AI:** LangGraph.js agents with Groq (llama-3.3-70b-versatile)
+- **Data Pipeline:** Playwright, Firecrawl, pdf-parse, OpenAI structured outputs
+
+## Features
+
+- BIN detection and card onboarding engine
+- Normalized card/bank/benefit/program knowledge graph
+- Reward portfolio valuation and optimization
+- "Best Card for Category X" engine
+- AI advisor (4 LangGraph agents + rule-based fallback)
+- Email parsing for reward balance extraction
+- Manual reward balance tracking
+- Redemption deep-links to bank portals
+- Admin dashboard for data pipeline management
+- Compare cards, explore catalog, active offers
+
+## Local Development
 
 ```bash
 # Install dependencies
@@ -11,85 +33,93 @@ npm install
 # Generate Prisma client
 npx prisma generate
 
-# Run database migrations
-npx prisma migrate dev
+# Run migrations
+npx prisma migrate deploy
 
-# Seed the database with demo data
+# Seed demo data
 npx tsx prisma/seed.mts
+npx tsx prisma/seed-normalized.mts
 
-# Start the development server
-npm run dev
+# Start dev server
+npx next dev
 ```
 
-Visit **http://localhost:3000**
+Create a `.env` file:
 
-## Demo Credentials
+```env
+DATABASE_URL="file:./dev.db"
+NEXTAUTH_SECRET="your-secret-here"
+NEXTAUTH_URL="http://localhost:3000"
+GROQ_API_KEY="your-groq-key"
+```
 
-- **Email:** arjun@rewardos.in
-- **Password:** demo1234
+Demo login: `arjun@rewardos.in` / `demo1234`
 
-## Tech Stack
+## Deploy to Vercel + Turso (Free)
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS + shadcn/ui |
-| Database | SQLite (via Prisma) |
-| ORM | Prisma 7 |
-| Auth | NextAuth.js |
-| AI/LLM | OpenAI SDK + LangGraph.js |
-| Charts | Recharts |
+### 1. Create Turso Database
 
-## Pages
+Sign up at [turso.tech](https://turso.tech) (free tier: 9GB storage), then:
 
-| Route | Description |
-|-------|-------------|
-| `/` | Landing page |
-| `/login` | Authentication |
-| `/register` | New account registration |
-| `/dashboard` | Portfolio overview with charts |
-| `/accounts` | Manage reward programs |
-| `/advisor` | AI-powered rewards advisor |
-| `/insights` | Expiring rewards, optimization tips |
-| `/admin` | Manage programs and conversion rates |
+- Create a database named `stash`
+- Copy the **Database URL** (`libsql://stash-yourusername.turso.io`)
+- Create an **Auth Token** from database settings
 
-## Reward Programs (Simulated)
+### 2. Seed the Turso Database
 
-- HDFC Reward Points (0.20 INR/pt)
-- Axis EDGE Rewards (0.25 INR/pt)
-- SBI Rewardz (0.25 INR/pt)
-- ICICI Reward Points (0.25 INR/pt)
-- Air India Flying Returns (0.75 INR/mile)
-- IndiGo BluChip (1.00 INR/pt)
-- Marriott Bonvoy (0.65 INR/pt)
+Add Turso credentials to your local `.env`:
 
-## AI Agents
+```env
+TURSO_DATABASE_URL="libsql://stash-yourusername.turso.io"
+TURSO_AUTH_TOKEN="your-turso-auth-token"
+```
 
-The app includes 5 LangGraph.js agents that work in **mock mode** (no API key needed) or with a real OpenAI API key:
+Then push the schema and seed:
 
-1. **Reward Aggregator** - Gathers and normalizes balances
-2. **Valuation Agent** - Calculates real redemption value
-3. **Optimization Agent** - Suggests best redemption strategy
-4. **Monitoring Agent** - Detects expiring assets
-5. **Personal CFO** - Conversational rewards advisor
+```bash
+npx prisma db push
+npx tsx prisma/seed.mts
+npx tsx prisma/seed-normalized.mts
+```
 
-## API Endpoints
+### 3. Deploy to Vercel
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register` | Register new user |
-| GET/POST | `/api/rewards` | List/create reward accounts |
-| PUT/DELETE | `/api/rewards/[id]` | Update/delete account |
-| POST | `/api/agent/chat` | Chat with AI advisor (SSE) |
-| POST | `/api/agent/workflow` | Run analysis workflow |
-| GET/POST/PUT | `/api/admin/programs` | Manage reward programs |
+Connect your GitHub repo at [vercel.com](https://vercel.com), then add these environment variables:
 
-## Database
+| Variable | Value |
+|---|---|
+| `TURSO_DATABASE_URL` | `libsql://stash-yourusername.turso.io` |
+| `TURSO_AUTH_TOKEN` | Your Turso auth token |
+| `NEXTAUTH_SECRET` | Any random string (use `openssl rand -base64 32`) |
+| `NEXTAUTH_URL` | Your Vercel deployment URL |
+| `GROQ_API_KEY` | Your Groq API key (optional) |
 
-SQLite database stored at `prisma/dev.db`. To switch to PostgreSQL:
+Deploy and you're live.
 
-1. Change `provider = "sqlite"` to `provider = "postgresql"` in `prisma/schema.prisma`
-2. Update `DATABASE_URL` in `.env`
-3. Install `@prisma/adapter-pg` instead of `@prisma/adapter-better-sqlite3`
-4. Run `npx prisma migrate dev`
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── (dashboard)/     # Protected pages (dashboard, cards, rewards, etc.)
+│   ├── api/             # API routes (v2/, admin/, cards/, auth/)
+│   ├── login/           # Login page
+│   └── register/        # Registration page
+├── lib/
+│   ├── agents/          # LangGraph AI agents
+│   ├── cards/           # Card onboarding engine
+│   ├── email/           # Email parser
+│   ├── extraction/      # AI data extraction pipeline
+│   ├── graph/           # Knowledge graph queries
+│   └── rewards/         # Valuator, optimizer, best-card engine
+├── components/          # UI components (shadcn/ui)
+└── proxy.ts             # Auth middleware
+prisma/
+├── schema.prisma        # Database schema
+├── seed.mts             # Demo user + legacy data seed
+└── seed-normalized.mts  # Normalized card knowledge graph seed
+```
+
+## License
+
+MIT
