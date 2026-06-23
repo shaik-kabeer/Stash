@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RewardOS - The Mint for Rewards
 
-## Getting Started
+RewardOS aggregates loyalty points, reward points, miles, cashback balances, and memberships from multiple providers into a single intelligent dashboard. Think of it as managing an investment portfolio, but for rewards.
 
-First, run the development server:
+## Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Generate Prisma client
+npx prisma generate
+
+# Run database migrations
+npx prisma migrate dev
+
+# Seed the database with demo data
+npx tsx prisma/seed.mts
+
+# Start the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit **http://localhost:3000**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Demo Credentials
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Email:** arjun@rewardos.in
+- **Password:** demo1234
 
-## Learn More
+## Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript |
+| Styling | Tailwind CSS + shadcn/ui |
+| Database | SQLite (via Prisma) |
+| ORM | Prisma 7 |
+| Auth | NextAuth.js |
+| AI/LLM | OpenAI SDK + LangGraph.js |
+| Charts | Recharts |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Pages
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Route | Description |
+|-------|-------------|
+| `/` | Landing page |
+| `/login` | Authentication |
+| `/register` | New account registration |
+| `/dashboard` | Portfolio overview with charts |
+| `/accounts` | Manage reward programs |
+| `/advisor` | AI-powered rewards advisor |
+| `/insights` | Expiring rewards, optimization tips |
+| `/admin` | Manage programs and conversion rates |
 
-## Deploy on Vercel
+## Reward Programs (Simulated)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- HDFC Reward Points (0.20 INR/pt)
+- Axis EDGE Rewards (0.25 INR/pt)
+- SBI Rewardz (0.25 INR/pt)
+- ICICI Reward Points (0.25 INR/pt)
+- Air India Flying Returns (0.75 INR/mile)
+- IndiGo BluChip (1.00 INR/pt)
+- Marriott Bonvoy (0.65 INR/pt)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## AI Agents
+
+The app includes 5 LangGraph.js agents that work in **mock mode** (no API key needed) or with a real OpenAI API key:
+
+1. **Reward Aggregator** - Gathers and normalizes balances
+2. **Valuation Agent** - Calculates real redemption value
+3. **Optimization Agent** - Suggests best redemption strategy
+4. **Monitoring Agent** - Detects expiring assets
+5. **Personal CFO** - Conversational rewards advisor
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register new user |
+| GET/POST | `/api/rewards` | List/create reward accounts |
+| PUT/DELETE | `/api/rewards/[id]` | Update/delete account |
+| POST | `/api/agent/chat` | Chat with AI advisor (SSE) |
+| POST | `/api/agent/workflow` | Run analysis workflow |
+| GET/POST/PUT | `/api/admin/programs` | Manage reward programs |
+
+## Database
+
+SQLite database stored at `prisma/dev.db`. To switch to PostgreSQL:
+
+1. Change `provider = "sqlite"` to `provider = "postgresql"` in `prisma/schema.prisma`
+2. Update `DATABASE_URL` in `.env`
+3. Install `@prisma/adapter-pg` instead of `@prisma/adapter-better-sqlite3`
+4. Run `npx prisma migrate dev`
