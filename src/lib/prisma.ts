@@ -1,33 +1,28 @@
 import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
-async function createAdapter() {
+function createPrismaClient(): PrismaClient {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
   const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
   if (tursoUrl && tursoToken) {
-    const { PrismaLibSql } = await import("@prisma/adapter-libsql");
-    return new PrismaLibSql({ url: tursoUrl, authToken: tursoToken });
+    const adapter = new PrismaLibSql({ url: tursoUrl, authToken: tursoToken });
+    return new PrismaClient({ adapter });
   }
 
-  const { PrismaBetterSqlite3 } = await import("@prisma/adapter-better-sqlite3");
-  return new PrismaBetterSqlite3({
+  // Local dev fallback - dynamic import to avoid bundling native module
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
+  const adapter = new PrismaBetterSqlite3({
     url: process.env.DATABASE_URL || "file:./dev.db",
   });
+  return new PrismaClient({ adapter });
 }
 
-let prismaPromise: Promise<PrismaClient> | null = null;
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-function getPrismaPromise() {
-  if (!prismaPromise) {
-    prismaPromise = createAdapter().then((adapter) => {
-      const client = new PrismaClient({ adapter });
-      globalForPrisma.prisma = client;
-      return client;
-    });
-  }
-  return prismaPromise;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
 }
-
-export const prisma = globalForPrisma.prisma || await getPrismaPromise();
