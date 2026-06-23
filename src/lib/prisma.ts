@@ -23,9 +23,7 @@ function getPrismaPromise() {
   if (!prismaPromise) {
     prismaPromise = createAdapter().then((adapter) => {
       const client = new PrismaClient({ adapter });
-      if (process.env.NODE_ENV !== "production") {
-        globalForPrisma.prisma = client;
-      }
+      globalForPrisma.prisma = client;
       return client;
     });
   }
@@ -33,5 +31,3 @@ function getPrismaPromise() {
 }
 
 export const prisma = globalForPrisma.prisma || await getPrismaPromise();
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
