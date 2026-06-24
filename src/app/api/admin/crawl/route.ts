@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createHash } from "crypto";
+import { validateCrawlContent } from "@/lib/extraction/content-quality";
+import { cleanCrawlContent } from "@/lib/extraction/clean-crawl-content";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -52,7 +54,15 @@ export async function POST(req: NextRequest) {
         data: { status: "completed", completedAt: new Date(), durationMs },
       });
 
-      return NextResponse.json({ crawlJobId: crawlJob.id, changed, contentLength: content.length, durationMs });
+      const quality = validateCrawlContent(cleanCrawlContent(content));
+
+      return NextResponse.json({
+        crawlJobId: crawlJob.id,
+        changed,
+        contentLength: content.length,
+        durationMs,
+        warning: quality.ok ? undefined : quality.reason,
+      });
     } catch (error) {
       const durationMs = Date.now() - startMs;
       await prisma.crawlJob.update({

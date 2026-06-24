@@ -19,7 +19,10 @@
     "parse:pdf": "npx tsx src/cli/parse-pdf.ts",
     "parse:html": "npx tsx src/cli/parse-html.ts",
     "seed:sources": "npx tsx src/cli/seed-sources.ts",
-    "extract": "npx tsx src/cli/extract.ts"
+    "seed:merchants": "npx tsx prisma/seed-merchants.mts",
+    "extract": "npx tsx src/cli/extract.ts",
+    "import:paisabazaar": "npx tsx scripts/import-paisabazaar.ts",
+    "seed:cards": "npx tsx scripts/seed-cards.ts"
   },
   "dependencies": {
     "@ai-sdk/groq": "^3.0.42",

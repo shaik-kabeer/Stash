@@ -15,10 +15,9 @@ export async function GET() {
     const userCards = await getPortfolioCards(userId);
     const allCards = await getAllCards();
 
-    const portfolio = userCards
-      .filter((uc) => uc.normalizedCard)
-      .map((uc) => {
-        const c = uc.normalizedCard!;
+    const portfolio = userCards.map((uc) => {
+      if (uc.normalizedCard) {
+        const c = uc.normalizedCard;
         return {
           userCardId: uc.id,
           cardId: c.id,
@@ -34,7 +33,23 @@ export async function GET() {
           offerCount: c.offers.length,
           confidence: uc.confidence,
         };
-      });
+      }
+      return {
+        userCardId: uc.id,
+        cardId: null,
+        name: uc.productName ?? uc.nickname ?? `${uc.bank ?? "Unknown"} Card`,
+        bank: uc.bank ?? "Unknown",
+        bankCode: uc.bank?.substring(0, 4).toUpperCase() ?? "",
+        network: uc.network ?? "Unknown",
+        tier: "Standard",
+        annualFee: 0,
+        estimatedAnnualValue: 0,
+        color: null,
+        benefitCount: 0,
+        offerCount: 0,
+        confidence: uc.confidence,
+      };
+    });
 
     const totalValue = portfolio.reduce((s, c) => s + c.estimatedAnnualValue, 0);
     const totalFees = portfolio.reduce((s, c) => s + c.annualFee, 0);

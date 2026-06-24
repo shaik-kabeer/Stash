@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowLeft,
   Award,
   BadgePercent,
@@ -13,7 +14,6 @@ import {
   IndianRupee,
   Loader2,
   Plane,
-  Plus,
   Shield,
   Star,
   Tag,
@@ -84,6 +84,8 @@ interface CardDetail {
   offers: Offer[];
 }
 
+const HIDDEN_BENEFIT_CATEGORIES = ["insurance", "golf", "forex", "milestone", "concierge"];
+
 const categoryIcons: Record<string, React.ElementType> = {
   lounge: Plane,
   travel: Plane,
@@ -94,6 +96,9 @@ const categoryIcons: Record<string, React.ElementType> = {
   insurance: Shield,
   entertainment: Star,
   golf: Award,
+  forex: IndianRupee,
+  milestone: TrendingUp,
+  concierge: Star,
 };
 
 const bankColors: Record<string, string> = {
@@ -151,6 +156,10 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
     (benefitsByCategory[b.category] ??= []).push(b);
   });
   const netValue = card.estimatedAnnualValue - card.annualFee;
+  const hiddenBenefits = card.benefits.filter(
+    (b) => HIDDEN_BENEFIT_CATEGORIES.includes(b.category) && b.valueEstimate > 0,
+  );
+  const estimatedLostValue = hiddenBenefits.reduce((sum, b) => sum + b.valueEstimate, 0);
 
   return (
     <div className="space-y-8">
@@ -245,6 +254,41 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
         </section>
       )}
 
+      {hiddenBenefits.length > 0 && (
+        <section className="rounded-xl border-2 border-amber-400/60 bg-amber-50/50 p-5 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/5">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+              <AlertTriangle className="size-4" />
+            </div>
+            <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">
+              Hidden Benefits You May Not Be Using
+            </h2>
+          </div>
+          <ul className="space-y-3">
+            {hiddenBenefits.map((b) => {
+              const Icon = categoryIcons[b.category] ?? Gift;
+              return (
+                <li key={b.id} className="flex items-start gap-3 rounded-lg border border-amber-200/60 bg-white/80 px-4 py-3 dark:border-amber-500/20 dark:bg-background/60">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                    <Icon className="size-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{b.title}</p>
+                    <p className="text-xs capitalize text-muted-foreground">{b.category}</p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                    ₹{b.valueEstimate.toLocaleString("en-IN")}/yr
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-4 border-t border-amber-200/60 pt-3 text-sm font-semibold text-amber-800 dark:border-amber-500/20 dark:text-amber-300">
+            Estimated Lost Value: ₹{estimatedLostValue.toLocaleString("en-IN")}/year
+          </p>
+        </section>
+      )}
+
       {/* Reward programs */}
       {card.rewardPrograms.length > 0 && (
         <section className="space-y-4">
@@ -283,7 +327,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-bold text-emerald-600">{r.estimatedCPP.toFixed(2)} cpp</p>
+                            <p className="text-sm font-bold text-emerald-600">{(r.estimatedCPP ?? 0).toFixed(2)} cpp</p>
                             {r.minPoints && <p className="text-[10px] text-muted-foreground">Min: {r.minPoints.toLocaleString()} pts</p>}
                           </div>
                         </div>
@@ -302,7 +346,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
                           <p className="text-sm font-medium">{tp.partnerName}</p>
                           <p className="text-xs text-muted-foreground capitalize">{tp.partnerType} &middot; {tp.transferRatio}</p>
                         </div>
-                        <p className="text-sm font-bold text-indigo-600">{tp.estimatedCPP.toFixed(2)} cpp</p>
+                        <p className="text-sm font-bold text-indigo-600">{(tp.estimatedCPP ?? 0).toFixed(2)} cpp</p>
                       </div>
                     ))}
                   </div>

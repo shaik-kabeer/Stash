@@ -1,13 +1,31 @@
 import { z } from "zod";
 
+const CARD_NETWORKS = ["Visa", "Mastercard", "Amex", "RuPay", "Diners Club", "Other"] as const;
+
+function coerceNetwork(value: unknown): (typeof CARD_NETWORKS)[number] {
+  if (typeof value !== "string") return "Other";
+  const normalized = value.trim();
+  const match = CARD_NETWORKS.find((n) => n.toLowerCase() === normalized.toLowerCase());
+  return match ?? "Other";
+}
+
+function coerceNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "string") {
+    const n = Number(value.replace(/[^\d.]/g, ""));
+    if (!Number.isNaN(n)) return n;
+  }
+  return fallback;
+}
+
 export const CardDetailsSchema = z.object({
-  name: z.string().describe("Full card name (e.g. 'HDFC Regalia Gold Credit Card')"),
-  bank: z.string().describe("Issuing bank name"),
-  network: z.enum(["Visa", "Mastercard", "Amex", "RuPay", "Diners Club", "Other"]),
+  name: z.string().default("Unknown Card"),
+  bank: z.string().default("Unknown Bank"),
+  network: z.preprocess(coerceNetwork, z.enum(CARD_NETWORKS)),
   cardType: z.enum(["credit", "debit", "prepaid"]).default("credit"),
-  tier: z.string().nullable().describe("Card tier: classic, gold, platinum, signature, etc."),
-  annualFee: z.number().describe("Annual fee in INR"),
-  joiningFee: z.number().describe("Joining/first year fee in INR"),
+  tier: z.string().nullable().default(null),
+  annualFee: z.preprocess((v) => coerceNumber(v), z.number()),
+  joiningFee: z.preprocess((v) => coerceNumber(v), z.number()),
 });
 
 export const BenefitItemSchema = z.object({
@@ -18,7 +36,7 @@ export const BenefitItemSchema = z.object({
   title: z.string().describe("Short benefit title"),
   description: z.string().describe("Detailed benefit description"),
   terms: z.string().nullable().describe("Terms and conditions if mentioned"),
-  valueEstimate: z.number().default(0).describe("Estimated annual value in INR, 0 if unknown"),
+  valueEstimate: z.preprocess((v) => coerceNumber(v), z.number()).default(0),
 });
 
 export const BenefitsSchema = z.object({
@@ -39,10 +57,18 @@ export const RewardStructureSchema = z.object({
 
 export const RedemptionOptionSchema = z.object({
   name: z.string(),
-  type: z.enum(["cashback", "miles", "voucher", "product", "statement_credit"]),
-  conversionRate: z.number().describe("Value per point in INR"),
-  minPoints: z.number().default(0),
-  description: z.string().nullable(),
+  type: z.preprocess(
+    (v) => {
+      if (typeof v !== "string") return "cashback";
+      const s = v.toLowerCase().replace(/\s+/g, "_");
+      const allowed = ["cashback", "miles", "voucher", "product", "statement_credit"] as const;
+      return allowed.find((a) => s.includes(a.replace("_", ""))) ?? "cashback";
+    },
+    z.enum(["cashback", "miles", "voucher", "product", "statement_credit"]),
+  ),
+  conversionRate: z.preprocess((v) => coerceNumber(v), z.number()),
+  minPoints: z.preprocess((v) => coerceNumber(v), z.number()).default(0),
+  description: z.string().nullable().default(null),
 });
 
 export const RedemptionOptionsSchema = z.object({
@@ -74,6 +100,16 @@ export const OffersSchema = z.object({
   offers: z.array(OfferItemSchema),
 });
 
+export const CardListingItemSchema = CardDetailsSchema.extend({
+  summary: z.string().nullable().optional(),
+  detailUrl: z.string().nullable().optional(),
+});
+
+export const CardListingSchema = z.object({
+  bank: z.string().nullable().optional(),
+  cards: z.array(CardListingItemSchema),
+});
+
 export type CardDetails = z.infer<typeof CardDetailsSchema>;
 export type BenefitItem = z.infer<typeof BenefitItemSchema>;
 export type Benefits = z.infer<typeof BenefitsSchema>;
@@ -81,3 +117,5 @@ export type RewardStructure = z.infer<typeof RewardStructureSchema>;
 export type RedemptionOptions = z.infer<typeof RedemptionOptionsSchema>;
 export type TransferPartners = z.infer<typeof TransferPartnersSchema>;
 export type Offers = z.infer<typeof OffersSchema>;
+export type CardListing = z.infer<typeof CardListingSchema>;
+export type CardListingItem = z.infer<typeof CardListingItemSchema>;

@@ -26,6 +26,8 @@ model User {
   cardReports     CardReport[]
   userCards       UserCard[]
   userRewards     UserReward[]
+  healthScores    RewardHealthScore[]
+  goalPlans       GoalPlan[]
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -99,6 +101,7 @@ model NormalizedProgram {
   redemptions     RedemptionOption[]
   transferPartners TransferPartner[]
   userRewards     UserReward[]
+  valuations      ProgramValuation[]
 }
 
 model RedemptionOption {
@@ -158,6 +161,7 @@ model UserReward {
   userId      String
   programId   String
   balance     Float              @default(0)
+  expiryDate  DateTime?
   lastSynced  DateTime           @default(now())
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
@@ -165,6 +169,59 @@ model UserReward {
   program     NormalizedProgram  @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@unique([userId, programId])
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Reward Health + Goal Planning
+// ══════════════════════════════════════════════════════════════════
+
+model RewardHealthScore {
+  id              String   @id @default(cuid())
+  userId          String
+  overallScore    Int
+  expiringPoints  Float    @default(0)
+  unusedBenefits  Int      @default(0)
+  inactiveCards   Int      @default(0)
+  potentialLoss   Float    @default(0)
+  factors         String?
+  computedAt      DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GoalPlan {
+  id                String   @id @default(cuid())
+  userId            String
+  title             String
+  destination       String?
+  targetValue       Float
+  targetCurrency    String   @default("INR")
+  currentProgress   Float    @default(0)
+  recommendedCards  String?
+  earningStrategy   String?
+  projectedDate     DateTime?
+  status            String   @default("active")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProgramValuation {
+  id              String            @id @default(cuid())
+  programId       String
+  redemptionType  String
+  valuePerPoint   Float
+  confidenceScore Float             @default(0.5)
+  sourceUrl       String?
+  lastUpdated     DateTime          @default(now())
+  program         NormalizedProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+}
+
+model MerchantCategory {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  group       String
+  description String?
 }
 
 // ══════════════════════════════════════════════════════════════════

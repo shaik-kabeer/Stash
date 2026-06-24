@@ -1,4 +1,4 @@
-import type { CardDetails, Benefits, RedemptionOptions, TransferPartners, Offers } from "./schemas.js";
+import type { CardDetails, Benefits, RedemptionOptions, TransferPartners, Offers } from "./schemas";
 
 export interface ValidationResult<T> {
   valid: boolean;

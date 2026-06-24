@@ -6,11 +6,16 @@ import {
   ArrowRight,
   Coins,
   CreditCard,
+  Heart,
   IndianRupee,
+  PieChart,
+  Plane,
   Plus,
+  ShieldAlert,
   Sparkles,
   Star,
   Tag,
+  Target,
   TrendingUp,
 } from "lucide-react";
 
@@ -46,14 +51,38 @@ interface RewardValuation {
   bestRedemptionRate: number;
   estimatedValueINR: number;
   bestRedemptionName: string;
+  category?: string;
 }
 
 interface Valuation {
   totalRewardPrograms: number;
   totalPointsBalance: number;
   totalEstimatedValueINR: number;
+  rewardNetWorth?: number;
   rewards: RewardValuation[];
+  byCategory?: { category: string; totalValueINR: number; programCount: number }[];
   insights: string[];
+}
+
+interface HealthScore {
+  overallScore: number;
+  grade: string;
+  expiringPoints: number;
+  unusedBenefits: number;
+  inactiveCards: number;
+  potentialLoss: number;
+  suggestions: string[];
+  factors: { name: string; impact: number; status: string; detail: string }[];
+}
+
+interface GoalPlan {
+  id: string;
+  title: string;
+  destination: string | null;
+  targetValue: number;
+  currentProgress: number;
+  projectedDate: string | null;
+  status: string;
 }
 
 const bankColors: Record<string, string> = {
@@ -72,15 +101,21 @@ function getCardGradient(bankCode: string): string {
 export default function DashboardPage() {
   const [data, setData] = useState<Portfolio | null>(null);
   const [rewards, setRewards] = useState<Valuation | null>(null);
+  const [health, setHealth] = useState<HealthScore | null>(null);
+  const [goals, setGoals] = useState<GoalPlan[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/v2/portfolio").then((r) => r.ok ? r.json() : null),
       fetch("/api/v2/rewards").then((r) => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([portfolio, rewardsData]) => {
+      fetch("/api/v2/health-score").then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/v2/goals").then((r) => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([portfolio, rewardsData, healthData, goalsData]) => {
       setData(portfolio?.cards ? portfolio : null);
       setRewards(rewardsData?.valuation ?? null);
+      setHealth(healthData?.overallScore !== undefined ? healthData : null);
+      setGoals(goalsData?.goals ?? []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -93,21 +128,157 @@ export default function DashboardPage() {
   }
 
   const portfolio = data ?? { cards: [], totalCards: 0, totalEstimatedValue: 0, totalAnnualFees: 0, netValue: 0, catalogSize: 0 };
+  const rewardNetWorth = (rewards?.rewardNetWorth ?? 0) || (portfolio.netValue + (rewards?.totalEstimatedValueINR ?? 0));
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Your cards and rewards at a glance</p>
+      {/* Reward Net Worth Hero */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 p-6 text-white shadow-xl sm:p-8">
+        <div className="absolute -right-10 -top-10 size-40 rounded-full bg-white/5" />
+        <div className="absolute -bottom-8 -left-8 size-32 rounded-full bg-white/5" />
+        <div className="relative">
+          <p className="text-sm font-medium uppercase tracking-wider text-indigo-200">Reward Net Worth</p>
+          <p className="mt-2 text-4xl font-extrabold tracking-tight sm:text-5xl">
+            ₹{Math.round(rewardNetWorth).toLocaleString("en-IN")}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-indigo-100">
+            <span className="flex items-center gap-1.5">
+              <CreditCard className="size-3.5" />
+              {portfolio.totalCards} cards (₹{portfolio.netValue.toLocaleString("en-IN")} net)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Coins className="size-3.5" />
+              {rewards?.totalPointsBalance.toLocaleString("en-IN") ?? "0"} points (₹{Math.round(rewards?.totalEstimatedValueINR ?? 0).toLocaleString("en-IN")})
+            </span>
+          </div>
+        </div>
+
+        {/* Category breakdown */}
+        {rewards?.byCategory && rewards.byCategory.length > 0 && (
+          <div className="relative mt-5 flex flex-wrap gap-2">
+            {rewards.byCategory.map((cat) => (
+              <span key={cat.category} className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur-sm">
+                {cat.category}: ₹{cat.totalValueINR.toLocaleString("en-IN")}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Top stats */}
+      {/* Health Score + Potential Loss */}
+      {health && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-xl border bg-card p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className={`flex size-14 items-center justify-center rounded-full text-2xl font-bold ${
+                health.grade === "excellent" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" :
+                health.grade === "good" ? "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" :
+                health.grade === "fair" ? "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400" :
+                "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400"
+              }`}>
+                {health.overallScore}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Heart className="size-4 text-rose-500" />
+                  <p className="font-semibold">Reward Health</p>
+                </div>
+                <p className="text-xs capitalize text-muted-foreground">{health.grade}</p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {health.factors.map((f, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <ShieldAlert className={`mt-0.5 size-3.5 shrink-0 ${
+                    f.status === "critical" ? "text-red-500" : f.status === "warning" ? "text-amber-500" : "text-emerald-500"
+                  }`} />
+                  <span className="text-muted-foreground">{f.detail}</span>
+                  <span className={`ml-auto shrink-0 font-mono text-[10px] ${f.impact > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                    {f.impact > 0 ? "+" : ""}{f.impact}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {health.potentialLoss > 0 && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-5 dark:border-red-900 dark:bg-red-950/20">
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400">Value at Risk</p>
+              <p className="mt-1 text-3xl font-bold text-red-600 dark:text-red-300">₹{health.potentialLoss.toLocaleString("en-IN")}</p>
+              <div className="mt-3 space-y-1 text-xs text-red-600/80 dark:text-red-300/70">
+                {health.expiringPoints > 0 && <p>Expiring: {health.expiringPoints.toLocaleString("en-IN")} pts</p>}
+                {health.unusedBenefits > 0 && <p>Unused benefits: {health.unusedBenefits}</p>}
+                {health.inactiveCards > 0 && <p>Inactive cards: {health.inactiveCards}</p>}
+              </div>
+              <Link href="/rewards" className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-red-700 hover:text-red-600 dark:text-red-400">
+                Fix now <ArrowRight className="size-3" />
+              </Link>
+            </div>
+          )}
+
+          {health.suggestions.length > 0 && (
+            <div className="rounded-xl border bg-card p-5 shadow-sm">
+              <p className="mb-3 text-sm font-semibold">Suggestions</p>
+              <div className="space-y-2">
+                {health.suggestions.slice(0, 4).map((s, i) => (
+                  <p key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Sparkles className="mt-0.5 size-3 shrink-0 text-indigo-500" />
+                    {s}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stats row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={CreditCard} label="My Cards" value={portfolio.totalCards} />
         <StatCard icon={TrendingUp} label="Card Annual Value" value={`₹${portfolio.totalEstimatedValue.toLocaleString("en-IN")}`} accent />
         <StatCard icon={Coins} label="Reward Points" value={rewards ? rewards.totalPointsBalance.toLocaleString("en-IN") : "0"} sub={rewards ? `${rewards.totalRewardPrograms} programs` : undefined} />
-        <StatCard icon={IndianRupee} label="Points Value" value={`₹${rewards ? Math.round(rewards.totalEstimatedValueINR).toLocaleString("en-IN") : "0"}`} accent sub="Unredeemed value" />
+        <StatCard icon={IndianRupee} label="Points Worth" value={`₹${rewards ? Math.round(rewards.totalEstimatedValueINR).toLocaleString("en-IN") : "0"}`} accent sub="Unredeemed value" />
       </div>
+
+      {/* Goal Plans */}
+      {goals.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-semibold"><Plane className="size-4" /> My Goals</h2>
+            <Link href="/goals" className="flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500">
+              Manage <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {goals.slice(0, 2).map((goal) => {
+              const pct = Math.min(100, Math.round((goal.currentProgress / goal.targetValue) * 100));
+              return (
+                <div key={goal.id} className="rounded-xl border bg-card p-4 shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{goal.title}</p>
+                      {goal.destination && <p className="text-xs text-muted-foreground">{goal.destination}</p>}
+                    </div>
+                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400">{pct}%</span>
+                  </div>
+                  <div className="mt-3">
+                    <div className="h-2 rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                      <span>₹{goal.currentProgress.toLocaleString("en-IN")}</span>
+                      <span>₹{goal.targetValue.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                  {goal.projectedDate && (
+                    <p className="mt-2 text-[10px] text-muted-foreground">Projected: {new Date(goal.projectedDate).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Insights banner */}
       {rewards && rewards.insights.length > 0 && (
@@ -124,11 +295,6 @@ export default function DashboardPage() {
               </li>
             ))}
           </ul>
-          {rewards.insights.length > 3 && (
-            <Link href="/rewards" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500">
-              View all insights <ArrowRight className="size-3" />
-            </Link>
-          )}
         </div>
       )}
 
@@ -142,7 +308,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {rewards.rewards.slice(0, 3).map((r) => (
+            {rewards.rewards.map((r) => (
               <Link key={r.programName} href="/rewards" className="group rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-indigo-300">
                 <div className="flex items-start justify-between">
                   <div>
@@ -218,11 +384,12 @@ export default function DashboardPage() {
       {/* Quick actions */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Quick Actions</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <QuickAction href="/rewards" icon={Coins} title="Rewards" description="View & optimize your reward points" />
-          <QuickAction href="/explore" icon={CreditCard} title="Explore Cards" description={`Browse ${portfolio.catalogSize}+ cards in catalog`} />
-          <QuickAction href="/offers" icon={Tag} title="View Offers" description="Deals across all your cards" />
-          <QuickAction href="/advisor" icon={Sparkles} title="AI Advisor" description="Personalized recommendations" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <QuickAction href="/rewards" icon={Coins} title="Rewards" description="View & optimize points" />
+          <QuickAction href="/simulator" icon={PieChart} title="Simulator" description="Compare redemption values" />
+          <QuickAction href="/goals" icon={Target} title="Goal Planner" description="Plan trips with rewards" />
+          <QuickAction href="/explore" icon={CreditCard} title="Explore" description={`${portfolio.catalogSize}+ cards`} />
+          <QuickAction href="/advisor" icon={Sparkles} title="AI Advisor" description="Personalized advice" />
         </div>
       </section>
     </div>

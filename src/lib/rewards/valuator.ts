@@ -1,4 +1,5 @@
 import { getUserRewards, getPortfolioCards } from "@/lib/graph/queries";
+import { prisma } from "@/lib/prisma";
 
 export interface PortfolioValuation {
   userId: string;
@@ -6,8 +7,10 @@ export interface PortfolioValuation {
   totalRewardPrograms: number;
   totalPointsBalance: number;
   totalEstimatedValueINR: number;
+  rewardNetWorth: number;
   cards: CardValuation[];
   rewards: RewardValuation[];
+  byCategory: CategoryBreakdown[];
   insights: string[];
 }
 
@@ -19,13 +22,32 @@ interface CardValuation {
   netValue: number;
 }
 
-interface RewardValuation {
+export interface RewardValuation {
+  programId: string;
   programName: string;
   pointName: string;
   balance: number;
   bestRedemptionRate: number;
   estimatedValueINR: number;
   bestRedemptionName: string;
+  category: string;
+}
+
+interface CategoryBreakdown {
+  category: string;
+  totalValueINR: number;
+  programCount: number;
+}
+
+function categorizeRedemptionType(type: string, programName: string): string {
+  const t = type.toLowerCase();
+  const n = programName.toLowerCase();
+  if (t.includes("flight") || t.includes("airline") || t.includes("travel") || n.includes("miles") || n.includes("flying")) return "Travel";
+  if (t.includes("hotel") || n.includes("marriott") || n.includes("hilton") || n.includes("itc")) return "Hotels";
+  if (t.includes("cashback") || t.includes("cash") || t.includes("statement")) return "Cashback";
+  if (t.includes("voucher") || t.includes("amazon") || t.includes("gift")) return "Vouchers";
+  if (t.includes("transfer") || t.includes("partner")) return "Transfer Partners";
+  return "Rewards";
 }
 
 export async function valuatePortfolio(userId: string): Promise<PortfolioValuation> {
@@ -47,21 +69,59 @@ export async function valuatePortfolio(userId: string): Promise<PortfolioValuati
       };
     });
 
+  const programValuations = await prisma.programValuation.findMany({
+    where: { programId: { in: rewards.map((r) => r.programId) } },
+  });
+
+  const pvMap = new Map<string, { valuePerPoint: number; type: string }>();
+  for (const pv of programValuations) {
+    const existing = pvMap.get(pv.programId);
+    if (!existing || pv.valuePerPoint > existing.valuePerPoint) {
+      pvMap.set(pv.programId, { valuePerPoint: pv.valuePerPoint, type: pv.redemptionType });
+    }
+  }
+
   const rewardValuations: RewardValuation[] = rewards.map((ur) => {
+    const pvEntry = pvMap.get(ur.programId);
     const bestRedemption = ur.program.redemptions[0];
-    const rate = bestRedemption?.conversionRate ?? 0;
+    const rate = pvEntry?.valuePerPoint ?? bestRedemption?.conversionRate ?? 0;
+    const bestName = pvEntry ? `${pvEntry.type} (valued)` : bestRedemption?.name ?? "None";
+    const category = categorizeRedemptionType(
+      bestRedemption?.type ?? pvEntry?.type ?? "",
+      ur.program.name,
+    );
+
     return {
+      programId: ur.programId,
       programName: ur.program.name,
       pointName: ur.program.pointName,
       balance: ur.balance,
       bestRedemptionRate: rate,
       estimatedValueINR: Math.round(ur.balance * rate * 100) / 100,
-      bestRedemptionName: bestRedemption?.name ?? "None",
+      bestRedemptionName: bestName,
+      category,
     };
   });
 
   const totalPointsBalance = rewardValuations.reduce((s, r) => s + r.balance, 0);
   const totalEstimatedValueINR = rewardValuations.reduce((s, r) => s + r.estimatedValueINR, 0);
+  const totalCardNetValue = cardValuations.reduce((s, c) => s + c.netValue, 0);
+  const rewardNetWorth = Math.round(totalCardNetValue + totalEstimatedValueINR);
+
+  const catMap = new Map<string, { total: number; count: number }>();
+  for (const r of rewardValuations) {
+    const e = catMap.get(r.category) ?? { total: 0, count: 0 };
+    e.total += r.estimatedValueINR;
+    e.count += 1;
+    catMap.set(r.category, e);
+  }
+  const byCategory: CategoryBreakdown[] = Array.from(catMap.entries())
+    .map(([category, { total, count }]) => ({
+      category,
+      totalValueINR: Math.round(total),
+      programCount: count,
+    }))
+    .sort((a, b) => b.totalValueINR - a.totalValueINR);
 
   const insights: string[] = [];
 
@@ -91,8 +151,10 @@ export async function valuatePortfolio(userId: string): Promise<PortfolioValuati
     totalRewardPrograms: rewards.length,
     totalPointsBalance,
     totalEstimatedValueINR,
+    rewardNetWorth,
     cards: cardValuations,
     rewards: rewardValuations,
+    byCategory,
     insights,
   };
 }

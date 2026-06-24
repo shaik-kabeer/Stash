@@ -61,11 +61,16 @@ interface BestCardCategory {
   }[];
 }
 
+type SortKey = "bank" | "fee-low" | "fee-high" | "value-high" | "value-low";
+
 export default function ExplorePage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
+  const [bankFilter, setBankFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<SortKey>("value-high");
+  const [allBanks, setAllBanks] = useState<string[]>([]);
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [compareMode, setCompareMode] = useState(false);
   const [binInput, setBinInput] = useState("");
@@ -85,19 +90,22 @@ export default function ExplorePage() {
         : `/api/v2/cards?${params}`;
       const res = await fetch(url);
       const data = await res.json();
+      let fetched: Card[];
       if (category !== "all") {
         const benefitCards: Card[] = data.benefits?.map((b: { card: Card }) => b.card).filter(Boolean) ?? [];
-        const unique = Array.from(new Map(benefitCards.map((c) => [c.id, c])).values());
-        setCards(unique);
+        fetched = Array.from(new Map(benefitCards.map((c) => [c.id, c])).values());
       } else {
-        setCards(data.cards ?? []);
+        fetched = data.cards ?? [];
       }
+      setCards(fetched);
+      const banks = Array.from(new Set(fetched.map((c) => c.bank?.name).filter(Boolean))).sort() as string[];
+      if (banks.length > allBanks.length) setAllBanks(banks);
     } catch {
       setCards([]);
     } finally {
       setLoading(false);
     }
-  }, [query, category]);
+  }, [query, category, allBanks.length]);
 
   useEffect(() => { fetchCards(); }, [fetchCards]);
 
@@ -252,17 +260,43 @@ export default function ExplorePage() {
         </div>
       )}
 
-      {/* Category filter tabs */}
-      <div className="flex flex-wrap gap-2">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setCategory(cat)}
-            className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${category === cat ? "bg-indigo-600 text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+      {/* Filters row */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategory(cat)}
+              className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${category === cat ? "bg-indigo-600 text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+            >
+              {cat === "all" ? "All Cards" : cat}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Filter className="size-3.5 text-muted-foreground" />
+            <select
+              value={bankFilter}
+              onChange={(e) => setBankFilter(e.target.value)}
+              className="rounded-lg border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">All Banks</option>
+              {allBanks.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+            className="rounded-lg border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            {cat === "all" ? "All Cards" : cat}
-          </button>
-        ))}
+            <option value="value-high">Value: High to Low</option>
+            <option value="value-low">Value: Low to High</option>
+            <option value="fee-low">Fee: Low to High</option>
+            <option value="fee-high">Fee: High to Low</option>
+            <option value="bank">Group by Bank</option>
+          </select>
+        </div>
       </div>
 
       {/* Compare panel */}
@@ -322,19 +356,31 @@ export default function ExplorePage() {
       )}
 
       {/* Card grid */}
-      {loading ? (
-        <div className="flex h-48 items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : cards.length === 0 ? (
-        <div className="rounded-xl border bg-card p-12 text-center">
-          <CreditCard className="mx-auto mb-4 size-12 text-muted-foreground/40" />
-          <h3 className="text-lg font-semibold">No cards found</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Try a different search or category filter.</p>
-        </div>
-      ) : (
+      {(() => {
+        if (loading) return (
+          <div className="flex h-48 items-center justify-center">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          </div>
+        );
+        const filtered = (bankFilter !== "all" ? cards.filter((c) => c.bank?.name === bankFilter) : cards).toSorted((a, b) => {
+          switch (sortBy) {
+            case "fee-low": return a.annualFee - b.annualFee;
+            case "fee-high": return b.annualFee - a.annualFee;
+            case "value-low": return a.estimatedAnnualValue - b.estimatedAnnualValue;
+            case "bank": return (a.bank?.name ?? "").localeCompare(b.bank?.name ?? "");
+            default: return b.estimatedAnnualValue - a.estimatedAnnualValue;
+          }
+        });
+        if (filtered.length === 0) return (
+          <div className="rounded-xl border bg-card p-12 text-center">
+            <CreditCard className="mx-auto mb-4 size-12 text-muted-foreground/40" />
+            <h3 className="text-lg font-semibold">No cards found</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Try a different search or category filter.</p>
+          </div>
+        );
+        return (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {cards.map((card) => {
+          {filtered.map((card) => {
             const grad = bankColors[card.bank?.code ?? ""] ?? "from-slate-700 to-slate-900";
             const isSelected = compareIds.has(card.id);
             return (
@@ -383,7 +429,8 @@ export default function ExplorePage() {
             );
           })}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

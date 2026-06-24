@@ -1,16 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 import {
   Bot,
   CheckCircle2,
   Clock,
+  Globe,
   Loader2,
   Pencil,
   Plus,
   Settings2,
   XCircle,
+  ArrowRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,6 +67,12 @@ interface Program {
   color: string | null;
   isActive: boolean;
   currencyEquivalent: string;
+  _source?: "normalized" | "legacy";
+  earnRate?: string | null;
+  pointName?: string | null;
+  cardName?: string | null;
+  redemptionCount?: number;
+  transferCount?: number;
 }
 
 interface AgentLog {
@@ -402,6 +411,26 @@ export function AdminView({ programs, agentLogs }: AdminViewProps) {
         <AddProgramDialog />
       </div>
 
+      <Card className="border-indigo-200/60 bg-indigo-50/50 dark:border-indigo-900 dark:bg-indigo-950/20">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Globe className="size-4 text-indigo-600" />
+            Card data pipeline
+          </CardTitle>
+          <CardDescription>
+            Add bank URLs, crawl page content, extract with AI, then approve in Extractions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href="/admin/sources"
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Open Sources (Crawl &amp; Extract) <ArrowRight className="size-4" />
+          </Link>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="border-border/60">
           <CardHeader className="pb-2">
@@ -453,7 +482,7 @@ export function AdminView({ programs, agentLogs }: AdminViewProps) {
                 <TableHead>Provider</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Rate (₹/pt)</TableHead>
-                <TableHead>Category</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-center">Active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -484,7 +513,12 @@ export function AdminView({ programs, agentLogs }: AdminViewProps) {
                   <TableCell className="text-right tabular-nums font-medium">
                     ₹{program.conversionRate.toFixed(2)}
                   </TableCell>
-                  <TableCell>{program.category}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={`text-[10px] ${program._source === "normalized" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                      {program._source === "normalized" ? "v2" : "legacy"}
+                    </Badge>
+                    {program.cardName && <p className="mt-0.5 text-[10px] text-muted-foreground">{program.cardName}</p>}
+                  </TableCell>
                   <TableCell>
                     <StatusBadge active={program.isActive} />
                   </TableCell>

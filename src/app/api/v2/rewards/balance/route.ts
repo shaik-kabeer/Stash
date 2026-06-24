@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
-    const { programId, balance } = await req.json();
+    const { programId, balance, expiryDate: expiryOverride } = await req.json();
 
     if (!programId || typeof balance !== "number" || balance < 0) {
       return NextResponse.json({ error: "programId and a non-negative balance are required" }, { status: 400 });
@@ -22,10 +22,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Reward program not found" }, { status: 404 });
     }
 
+    let expiryDate: Date | null = null;
+    if (expiryOverride) {
+      expiryDate = new Date(expiryOverride);
+    } else if (program.expiryMonths && program.expiryMonths > 0) {
+      expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + program.expiryMonths);
+    }
+
     const reward = await prisma.userReward.upsert({
       where: { userId_programId: { userId, programId } },
-      update: { balance, lastSynced: new Date() },
-      create: { userId, programId, balance },
+      update: { balance, lastSynced: new Date(), ...(expiryDate && { expiryDate }) },
+      create: { userId, programId, balance, expiryDate },
     });
 
     return NextResponse.json({
@@ -34,6 +42,7 @@ export async function POST(req: NextRequest) {
         id: reward.id,
         programId: reward.programId,
         balance: reward.balance,
+        expiryDate: reward.expiryDate,
         lastSynced: reward.lastSynced,
       },
     });

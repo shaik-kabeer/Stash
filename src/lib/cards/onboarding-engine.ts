@@ -192,40 +192,49 @@ export async function runOnboardingEngine(input: OnboardingInput): Promise<Onboa
     pipeline.push({ step: "Bank Identification", status: "failed", data: { reason: "No bank information available" }, durationMs: Date.now() - t4 });
   }
 
-  // ── Step 5: Card Catalog Matching ─────────────────────────────
+  // ── Step 5: Card Catalog Matching (normalized graph only) ─────
 
   const t5 = Date.now();
-  if (localMatch?.cardProduct) {
-    cardProductId = localMatch.cardProduct.id;
-    productName = localMatch.cardProduct.name;
-    confidence = "exact";
-    confidenceScore = 1.0;
-    pipeline.push({ step: "Card Catalog Matching", status: "success", data: { match: "exact", productId: cardProductId, productName }, durationMs: Date.now() - t5 });
+  if (normalizedCard) {
+    productName = normalizedCard.name;
+    pipeline.push({ step: "Card Catalog Matching", status: "success", data: { match: "normalized_graph", cardId: normalizedCardId, productName }, durationMs: Date.now() - t5 });
   } else if (bank) {
-    const fuzzy = await prisma.cardProduct.findMany({
-      where: { bank: { contains: bank.split(" ")[0] } },
-      select: { id: true, name: true, bank: true, network: true },
+    const bankKey = bank.split(" ")[0];
+    const fuzzy = await prisma.card.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { bank: { name: { contains: bankKey } } },
+          { bank: { code: { contains: bankKey.toUpperCase() } } },
+        ],
+      },
+      select: { id: true, name: true, network: true },
     });
 
     if (fuzzy.length === 1) {
-      cardProductId = fuzzy[0].id;
+      normalizedCardId = fuzzy[0].id;
       productName = fuzzy[0].name;
       confidence = "probable";
-      confidenceScore = 0.6;
-      pipeline.push({ step: "Card Catalog Matching", status: "partial", data: { match: "single_bank_match", productId: cardProductId, productName, candidates: 1 }, durationMs: Date.now() - t5 });
+      confidenceScore = Math.max(confidenceScore, 0.6);
+      normalizedCard = await getCardWithFullGraph(normalizedCardId);
+      pipeline.push({ step: "Card Catalog Matching", status: "partial", data: { match: "single_bank_match", cardId: normalizedCardId, productName, candidates: 1 }, durationMs: Date.now() - t5 });
     } else if (fuzzy.length > 1) {
-      // Try narrowing by network
       const networkFiltered = fuzzy.filter((f) => f.network.toLowerCase() === (network ?? "").toLowerCase());
       if (networkFiltered.length === 1) {
-        cardProductId = networkFiltered[0].id;
+        normalizedCardId = networkFiltered[0].id;
         productName = networkFiltered[0].name;
         confidence = "probable";
-        confidenceScore = 0.7;
-        pipeline.push({ step: "Card Catalog Matching", status: "partial", data: { match: "bank+network_narrowed", productId: cardProductId, productName, candidates: fuzzy.length }, durationMs: Date.now() - t5 });
+        confidenceScore = Math.max(confidenceScore, 0.7);
+        normalizedCard = await getCardWithFullGraph(normalizedCardId);
+        pipeline.push({ step: "Card Catalog Matching", status: "partial", data: { match: "bank+network_narrowed", cardId: normalizedCardId, productName, candidates: fuzzy.length }, durationMs: Date.now() - t5 });
       } else {
+        // Pick the first match as best guess so the card at least links
+        normalizedCardId = fuzzy[0].id;
+        productName = fuzzy[0].name;
         confidence = "probable";
-        confidenceScore = 0.3;
-        pipeline.push({ step: "Card Catalog Matching", status: "partial", data: { match: "multiple_candidates", candidates: fuzzy.map((f) => ({ id: f.id, name: f.name })) }, durationMs: Date.now() - t5 });
+        confidenceScore = Math.max(confidenceScore, 0.4);
+        normalizedCard = await getCardWithFullGraph(normalizedCardId);
+        pipeline.push({ step: "Card Catalog Matching", status: "partial", data: { match: "best_guess_from_candidates", cardId: normalizedCardId, productName, candidates: fuzzy.map((f) => ({ id: f.id, name: f.name })) }, durationMs: Date.now() - t5 });
       }
     } else {
       pipeline.push({ step: "Card Catalog Matching", status: "skipped", data: { reason: "No cards from this bank in catalog" }, durationMs: Date.now() - t5 });
@@ -234,10 +243,22 @@ export async function runOnboardingEngine(input: OnboardingInput): Promise<Onboa
     pipeline.push({ step: "Card Catalog Matching", status: "skipped", data: { reason: "No bank info to match against" }, durationMs: Date.now() - t5 });
   }
 
-  // ── Step 6: Reward Program Mapping ────────────────────────────
+  // ── Step 6: Reward Program Mapping (normalized) ────────────────
 
   const t6 = Date.now();
-  if (bank) {
+  if (normalizedCardId) {
+    const nProg = await prisma.normalizedProgram.findFirst({
+      where: { cardId: normalizedCardId, isActive: true },
+      select: { id: true, name: true },
+    });
+    if (nProg) {
+      rewardProgramName = nProg.name;
+      if (confidenceScore > 0) confidenceScore = Math.min(confidenceScore + 0.1, 1.0);
+      pipeline.push({ step: "Reward Program Mapping", status: "success", data: { programId: nProg.id, programName: nProg.name, source: "normalized" }, durationMs: Date.now() - t6 });
+    } else {
+      pipeline.push({ step: "Reward Program Mapping", status: "skipped", data: { reason: "No normalized program for this card" }, durationMs: Date.now() - t6 });
+    }
+  } else if (bank) {
     const program = await prisma.rewardProgram.findFirst({
       where: {
         OR: [
@@ -248,12 +269,10 @@ export async function runOnboardingEngine(input: OnboardingInput): Promise<Onboa
       },
       select: { id: true, name: true },
     });
-
     if (program) {
       rewardProgramId = program.id;
       rewardProgramName = program.name;
-      if (confidenceScore > 0) confidenceScore = Math.min(confidenceScore + 0.1, 1.0);
-      pipeline.push({ step: "Reward Program Mapping", status: "success", data: { programId: program.id, programName: program.name }, durationMs: Date.now() - t6 });
+      pipeline.push({ step: "Reward Program Mapping", status: "success", data: { programId: program.id, programName: program.name, source: "legacy_fallback" }, durationMs: Date.now() - t6 });
     } else {
       pipeline.push({ step: "Reward Program Mapping", status: "skipped", data: { reason: `No reward program found for bank: ${bank}` }, durationMs: Date.now() - t6 });
     }

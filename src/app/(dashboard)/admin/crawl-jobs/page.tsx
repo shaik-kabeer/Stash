@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Clock, CheckCircle, AlertCircle, Loader2, Globe, Timer } from "lucide-react";
+import Link from "next/link";
+import { Clock, CheckCircle, AlertCircle, Loader2, Globe, Timer, ArrowRight } from "lucide-react";
 
 interface CrawlJob {
   id: string;
@@ -55,9 +56,22 @@ export default function CrawlJobsPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+        <p className="text-sm">
+          <strong>Crawl</strong> and <strong>Extract</strong> buttons are on{" "}
+          <span className="font-medium">Admin → Sources</span> — this page only shows past crawl runs.
+        </p>
+        <Link
+          href="/admin/sources"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:opacity-90"
+        >
+          Go to Sources <ArrowRight className="size-4" />
+        </Link>
+      </div>
+
       <div>
         <h1 className="text-2xl font-bold">Crawl Jobs</h1>
-        <p className="text-muted-foreground">{jobs.length} jobs</p>
+        <p className="text-muted-foreground">{jobs.length} jobs — history only</p>
       </div>
 
       <div className="flex gap-2">
@@ -112,7 +126,12 @@ export default function CrawlJobsPage() {
           </tbody>
         </table>
         {jobs.length === 0 && (
-          <div className="p-8 text-center text-muted-foreground">No crawl jobs found</div>
+          <div className="space-y-2 p-8 text-center text-muted-foreground">
+            <p>No crawl jobs yet.</p>
+            <Link href="/admin/sources" className="inline-flex items-center gap-1 text-primary underline">
+              Add a source and click Crawl <ArrowRight className="size-3" />
+            </Link>
+          </div>
         )}
       </div>
     </div>

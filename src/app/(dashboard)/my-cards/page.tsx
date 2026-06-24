@@ -7,6 +7,8 @@ import {
   CreditCard,
   Loader2,
   Plus,
+  RefreshCw,
+  Search,
   Shield,
   Trash2,
   X,
@@ -52,6 +54,13 @@ function confidenceBadge(c: string) {
   return { label: "Unknown", cls: "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400" };
 }
 
+interface CatalogCard {
+  id: string;
+  name: string;
+  network: string;
+  bank: { name: string; code: string };
+}
+
 export default function MyCardsPage() {
   const [cards, setCards] = useState<UserCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +69,43 @@ export default function MyCardsPage() {
   const [nickname, setNickname] = useState("");
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [correctingId, setCorrectingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<CatalogCard[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
+
+  const handleSearch = async (q: string) => {
+    setSearchQuery(q);
+    if (q.length < 2) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/v2/cards?q=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data.cards?.slice(0, 8) ?? []);
+      }
+    } catch { /* ignore */ }
+    setSearching(false);
+  };
+
+  const handleCorrect = async (userCardId: string, cardId: string) => {
+    setCorrecting(true);
+    try {
+      const res = await fetch("/api/cards/onboard", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userCardId, cardId }),
+      });
+      if (res.ok) {
+        setCorrectingId(null);
+        setSearchQuery("");
+        setSearchResults([]);
+        loadCards();
+      }
+    } catch { /* ignore */ }
+    setCorrecting(false);
+  };
 
   const loadCards = () => {
     setLoading(true);
@@ -190,38 +236,91 @@ export default function MyCardsPage() {
             const nc = card.normalizedCard;
             const badge = confidenceBadge(card.confidence);
             const grad = bankColors[nc?.bank?.code ?? ""] ?? "from-slate-700 to-slate-900";
+            const isCorrectingThis = correctingId === card.id;
             return (
-              <Link key={card.id} href={nc ? `/cards/${nc.id}` : "#"} className="group">
-                <div className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${grad} p-5 text-white shadow-lg transition-transform group-hover:scale-[1.02]`}>
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium uppercase tracking-wider opacity-80">{nc?.bank?.name ?? card.bank ?? "Unknown"}</p>
-                      <p className="mt-1 truncate text-lg font-semibold">{nc?.name ?? card.nickname ?? "Unknown Card"}</p>
+              <div key={card.id} className="space-y-2">
+                <Link href={nc ? `/cards/${nc.id}` : "#"} className="group block">
+                  <div className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${grad} p-5 text-white shadow-lg transition-transform group-hover:scale-[1.02]`}>
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium uppercase tracking-wider opacity-80">{nc?.bank?.name ?? card.bank ?? "Unknown"}</p>
+                        <p className="mt-1 truncate text-lg font-semibold">{nc?.name ?? card.nickname ?? "Unknown Card"}</p>
+                      </div>
+                      <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">{card.network ?? nc?.network ?? ""}</span>
                     </div>
-                    <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">{card.network ?? nc?.network ?? ""}</span>
+                    <p className="mt-2 font-mono text-sm tracking-widest opacity-60">
+                      •••• •••• •••• {card.last4 ?? card.inputBIN.slice(-4)}
+                    </p>
+                    <div className="mt-4 flex items-end justify-between">
+                      <div>
+                        {nc && (
+                          <>
+                            <p className="text-xs opacity-70">Annual Value</p>
+                            <p className="text-lg font-bold">₹{nc.estimatedAnnualValue.toLocaleString("en-IN")}</p>
+                          </>
+                        )}
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}>{badge.label}</span>
+                    </div>
+                    {nc && (
+                      <div className="mt-3 flex gap-3 text-xs opacity-70">
+                        <span>{nc.benefits.length} benefits</span>
+                        <span>{nc.offers.length} offers</span>
+                      </div>
+                    )}
                   </div>
-                  <p className="mt-2 font-mono text-sm tracking-widest opacity-60">
-                    •••• •••• •••• {card.last4 ?? card.inputBIN.slice(-4)}
-                  </p>
-                  <div className="mt-4 flex items-end justify-between">
-                    <div>
-                      {nc && (
-                        <>
-                          <p className="text-xs opacity-70">Annual Value</p>
-                          <p className="text-lg font-bold">₹{nc.estimatedAnnualValue.toLocaleString("en-IN")}</p>
-                        </>
-                      )}
+                </Link>
+
+                {card.confidence !== "exact" && !isCorrectingThis && (
+                  <button
+                    onClick={() => { setCorrectingId(card.id); setSearchQuery(""); setSearchResults([]); }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-500/10"
+                  >
+                    <RefreshCw className="size-3" /> Wrong card? Change match
+                  </button>
+                )}
+
+                {isCorrectingThis && (
+                  <div className="rounded-lg border bg-card p-3 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-semibold">Search for the correct card</p>
+                      <button onClick={() => setCorrectingId(null)} className="p-0.5 text-muted-foreground hover:text-foreground">
+                        <X className="size-3.5" />
+                      </button>
                     </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}>{badge.label}</span>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2 size-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        placeholder="Type card name..."
+                        className="w-full rounded-lg border bg-background py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        autoFocus
+                      />
+                    </div>
+                    {searching && <p className="mt-2 text-xs text-muted-foreground">Searching...</p>}
+                    {searchResults.length > 0 && (
+                      <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                        {searchResults.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => handleCorrect(card.id, c.id)}
+                            disabled={correcting}
+                            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                          >
+                            <div>
+                              <p className="font-medium">{c.name}</p>
+                              <p className="text-[10px] text-muted-foreground">{c.bank.name} &middot; {c.network}</p>
+                            </div>
+                            <CheckCircle2 className="size-4 text-emerald-500" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {nc && (
-                    <div className="mt-3 flex gap-3 text-xs opacity-70">
-                      <span>{nc.benefits.length} benefits</span>
-                      <span>{nc.offers.length} offers</span>
-                    </div>
-                  )}
-                </div>
-              </Link>
+                )}
+              </div>
             );
           })}
         </div>
